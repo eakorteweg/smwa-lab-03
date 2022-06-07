@@ -88,20 +88,21 @@ library(fixest)
 library(broom)
 library(ggplot2)
 library(modelsummary)
+library(janitor)
 ```
 
 1. What is search engine advertising?
   Explain the mechanisms through which it might ultimately influence sales revenue.
 
-**Write your answer here**
+Search engine advertising allows you to directly display your paid ads among the search results on various search engines. Advertisers who utilize search advertising show their ads to users who are actively searching for specific keywords, and they pay a fee every time someone clicks the ad. This type of advertising helps to raise brand awareness which might lead to more sales/revenue.
   
 2. Why would it be difficult to estimate the effectiveness of search engine advertising with purely observational data?
 
-**Write your answer here**
+There might be unobserved variables which increase the effectiveness of search engine advertising. For example, when people already saw your advertisement/firm name before, the change that they click on your ad and buy some thing through it, might be higher than for firms people are unaware off before the search engine ad.
 
 3. Explain why the experiment that Blake, Nosko and Tadelis runs allows them to avoid the issues in (2), and accurately measure the causal effect of search engine advertising on sales.
 
-**Write your answer here**
+Blake, Nosko and Tadelis have a control group (namely the regions without these ads) to control for other variables that influence the effectiveness of search engine advertising which allows the authors to accurately measure the causal effect of SEA on sales.
 
 With some conceptual knowledge under our belt, let's get our hands dirty.
 We will start by cleaning up the data a little and then producing some summary plots to build up an understanding of the main patterns.
@@ -109,7 +110,7 @@ We will start by cleaning up the data a little and then producing some summary p
 4. Load the data into `R` naming the data `paidsearch`.
 
 ```{r}
-# Write your answer here
+paidsearch <- read_csv("data/paid_search.csv")
 ```
 
 
@@ -117,7 +118,8 @@ We will start by cleaning up the data a little and then producing some summary p
 If you find that one of the column names in the data has whitespace in it, you will want to replace the whitespace with underscores, "`_`"
 
 ```{r}
-# Write your answer here
+paidsearch <- paidsearch %>%
+    clean_names()
 ```
 
 
@@ -125,7 +127,9 @@ If you find that one of the column names in the data has whitespace in it, you w
 Modify the `revenue` variable so that the new values are in '000s of USD.
 
 ```{r}
-# Write your answer here
+paidsearch <- 
+    paidsearch %>%
+    mutate(revenue = revenue / 1000) 
 ```
 
 
@@ -135,9 +139,9 @@ Run the following code to make this conversion:
 ```{r}
 # Uncomment these lines by removing the #'s
 # in front of the code when you get to this point
-# paidsearch <-
-#     paidsearch %>%
-#     mutate(date  = as_date(date, format = '%d-%b-%y'))
+paidsearch <-
+     paidsearch %>%
+     mutate(date  = as_date(date, format = '%d-%b-%y'))
 ```
 
 
@@ -145,7 +149,14 @@ Run the following code to make this conversion:
 Plot the data so that you can see how average revenue evolves over time.
 
 ```{r}
-# Write your answer here
+paidsearch %>%
+    group_by(date) %>%
+    summarise(revenue = mean(revenue)) %>%
+    ggplot(aes(x = date,
+               y = revenue)) + 
+    geom_line() + 
+    scale_x_date(date_labels = "%Y %b %d") + 
+    theme_bw()
 ```
 
 
@@ -157,9 +168,9 @@ To make this easier, run the following code to extract the calendar week from ea
 ```{r}
 # Uncomment these lines by removing the #'s
 # in front of the code when you get to this point
-#paidsearch <-
-#    paidsearch %>%
-#    mutate(calweek = week(date))
+paidsearch <-
+    paidsearch %>%
+    mutate(calweek = week(date))
 ```
 
 
@@ -167,7 +178,11 @@ To make this easier, run the following code to extract the calendar week from ea
 The resulting dataset should have 34 observations, 17 where `search_stays_on =1` and 17 where `search_stays_on =0`.
 
 ```{r}
-# Write your answer here
+grp_avg <- 
+    paidsearch %>%
+    group_by(search_stays_on, calweek) %>%
+    summarise(revenue = mean(revenue)) %>%
+    arrange(calweek, search_stays_on)
 ```
 
 
@@ -181,21 +196,32 @@ knitr::include_graphics('figs/ebay_experiment.png')
 
 
 ```{r}
-# Write your answer here
+exp_start <- as_date("2012-05-22")
+
+grp_avg %>%
+    ggplot(aes(x = calweek, 
+               y = revenue, 
+               color = factor(search_stays_on))) +
+    geom_line() + 
+    geom_vline(xintercept = week(exp_start)) +
+    ggtitle("Average Daily Revenue from Search Engine Marketing") + 
+    xlab("Calender Week") + 
+    ylab("Revenue ('000 of USD)") +
+    theme_bw()
 ```
 
 
 10. Is average revenue different for DMAs that have turned off search advertising compared to those where it remains on?
 Why might this be the case?
 
-**Write your answer here**
+No, the average revenue is not different for DMAs that have turned off search advertising compared to those where it remains on. This might be due to ...
 
 11. From the graph above, can you "eye-conometrically" see any effect of turning off search engine ads?^[
   All "clean" (well-executed) Difference in Difference papers should produce a plot where you can visually assess what is going on.
   If you don't see one, its could a warning sign that whatever comes next is an artifact of the statistical model, rather than the experiment (or, if published in a journal *maybe* an editor asked to suppress the figure to save space).
 ]
 
-**Write your answer here**
+No, you cannot see any effect of turning off search engine ads.
 
 
 Now we will go back to working with the full dataset `paidsearch`.
@@ -204,7 +230,12 @@ Now we will go back to working with the full dataset `paidsearch`.
 Also rename the variable `treatment_period` to `after`.
 
 ```{r}
-# Write your answer here
+paidsearch <- 
+    paidsearch %>%
+    mutate(treatment = case_when(
+        search_stays_on == 0 ~ 1,
+        TRUE ~ 0)) %>%
+    rename(after = treatment_period)
 ```
 
 
@@ -220,42 +251,58 @@ Thus $\bar{y}_{after=1, treat =1}$ is average revenue for DMAs in the treatment 
 Compute each of these four $\bar{y}$'s.
 
 ```{r}
-# Write your answer here
+treat_table <- 
+    paidsearch %>%
+    group_by(after, treatment) %>%
+    summarise(revenue = mean(revenue)) %>%
+    ungroup()
 ```
 
 
 14. Use the averages you computed in (13) to the treatment effect of turning off search engine advertising, i.e. $\hat{\beta}_{DiD}$.
 
 ```{r}
-# Write your answer here
+treat_table %>%
+    pivot_wider(names_from = treatment, 
+                values_from = revenue) %>%
+    mutate_all(funs(. - lag(.))) %>%
+    mutate(did_simple = `1` - `0`) %>%
+    na.omit() %>%
+    select(did_simple)
 ```
 
 
 15. Interpret the effect you computed from the point of view of a marketing analyst working at eBay. Is it large from a marketing viewpoint?
 
-**Write your answer here**
+
 
 16. We rarely see analytical work use this difference in averages approach.
 Can you explain why that might be the case?
 
-**Write your answer here**
+With only the averages you cannot see the standard error and whether it is statistically significant. Furthermore, you can add extra control variables into the regression and you can use log(y) as dependent variable.
 
 17. Estimate a linear regression that computes the equivalent Difference-in-Difference estimate as (13).
 
 ```{r}
-# Write your answer here
+reg_did <- feols(revenue ~ after + treatment + after:treatment, data = paidsearch)
+
+tidy(reg_did, conf.int = TRUE)
 ```
 
 
 18. Is $\hat{\beta}_{DiD}$ statistically significant? How can you tell?
 
-**Write your answer here**
+No, the value is not statistically significant since the p-value is > than 0.05, namely 0.8639.
 
 19. We can repeat the estimation in (17) using $\log(revenue)$ rather than $revenue$. Why might we want to do that?
 Run this regression and interpret the magnitude of the treatment effect.
 
+We might want to use the log so we can interpret the estimations directly as percentages instead of percentage points.
+
 ```{r}
-# Write your answer here
+reg_did2 <- feols(log(revenue) ~ after + treatment + after:treatment, data = paidsearch)
+
+tidy(reg_did2, conf.int = TRUE)
 ```
 
 
@@ -293,10 +340,18 @@ What is the parallel trends assumption and why do we need it?
 Does it appear satisfied in our data?
 
 ```{r}
-# Write your answer here
+grp_avg %>%
+    filter(calweek <= week(exp_start)) %>%
+    ggplot(aes(x= calweek, y = revenue, color = factor(search_stays_on))) + 
+    geom_line() +
+    ggtitle("Average Daily Revenue from Search Engine Marketing", 
+            subtitle = "Pre-treatment Period") + 
+    xlab("Calendar Week") +
+    ylab("Revenue ('000s of USD") + 
+    theme_bw()
 ```
 
 
 25. Can we definitively conclude from the results above that search engine marketing does not pay off? Explain your answer.
 
-**Write your answer here**
+Yes, because the assumptions of parallell trends is met so the no difference we found is causal. 
